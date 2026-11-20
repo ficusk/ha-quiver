@@ -402,6 +402,7 @@ export const ingestStateChanged = mutation({
       };
       await upsertEntity(ctx, incoming, now, { suppressRedundant: true });
     }
+    await reviveConnection(ctx, now);
   },
 });
 
@@ -452,6 +453,14 @@ export const recordIngestPressure = mutation({
     }
   },
 });
+
+// A socket can outlive a redeploy: the old deployment reports it closed,
+// but the home stays on the line and never sends another snapshot. Any
+// frame from it proves it's there, so set the status straight.
+async function reviveConnection(ctx: any, now: number): Promise<void> {
+  const existing = await ctx.db.query("connection").first();
+  if (existing && !(existing as any).connected) await markConnected(ctx, now);
+}
 
 async function markConnected(ctx: any, now: number): Promise<void> {
   const existing = await ctx.db.query("connection").first();
@@ -703,6 +712,7 @@ export const updateCameraSession = mutation({
       next.candidates = { ...(row.candidates ?? {}), ...patch.candidates };
     }
     await ctx.db.patch(row._id, next);
+    await reviveConnection(ctx, Date.now());
   },
 });
 
