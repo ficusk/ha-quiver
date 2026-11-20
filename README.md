@@ -94,7 +94,7 @@ The tools, briefly:
 
 - `entities`, `areas`, `connection` (queries): the house's live state.
 - `callService` (action): any Home Assistant service call.
-- `cameraSignal` and `cameraSession` (actions): the WebRTC handshake for a
+- `cameraSignal` (action) and `cameraSession` (query): the WebRTC handshake for a
   camera's live view.
 
 ## How it works

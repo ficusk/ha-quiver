@@ -576,13 +576,12 @@ export const callService = action({
 //
 // Live video is a WebRTC session between the viewer's browser and the
 // camera's stream source; only the handshake rides the link. The viewer
-// drives it with `cameraSignal`, Home Assistant's replies land in the
-// `camera-sessions` Slate under the session id (written by the bridge's
-// `cameraSignal` dispatch), and the viewer reads them from there:
-// `useSlate("camera-sessions")` in this app's UI, `cameraSession` from
-// anywhere else.
+// drives it with `cameraSignal`. Home Assistant's replies come back through
+// the bridge's `cameraSignal` dispatch into a `cameraSessions` row, and the
+// viewer watches that row with the `cameraSession` query.
 
 const SESSION_ID = /^[A-Za-z0-9_-]{8,64}$/;
+const SESSION_STALE_MS = 10 * 60_000;
 
 export interface CameraSession {
   entityId: string;
@@ -593,6 +592,13 @@ export interface CameraSession {
   /** Remote ICE candidates (RTCIceCandidateInit), keyed by arrival order. */
   candidates?: Record<string, Record<string, unknown>>;
   error?: { code: string; message: string };
+}
+
+async function sessionRow(ctx: any, sessionId: string) {
+  return ctx.db
+    .query("cameraSessions")
+    .withIndex("by_session", (q: any) => q.eq("sessionId", sessionId))
+    .first();
 }
 
 export const cameraSignal = action({
@@ -620,9 +626,11 @@ export const cameraSignal = action({
     }
     if (type === "offer" && !sdp) throw new Error("An offer needs its sdp.");
 
-    const sessions = ctx.slates.open<CameraSession>("camera-sessions");
+    const fns = api.backend.functions;
     if (type === "start") {
-      await sessions.set(sessionId, { entityId, startedAt: Date.now() });
+      await ctx.runMutation(fns.openCameraSession, { sessionId, entityId });
+    } else if (type === "keepalive") {
+      await ctx.runMutation(fns.updateCameraSession, { sessionId, patch: {} });
     }
     try {
       await ctx
@@ -638,24 +646,71 @@ export const cameraSignal = action({
         );
     } catch (err) {
       if (type !== "close") {
-        await sessions.delete(sessionId).catch(() => {});
+        await ctx.runMutation(fns.closeCameraSession, { sessionId });
         throw err;
       }
     }
-    if (type === "close") await sessions.delete(sessionId).catch(() => {});
+    if (type === "close") {
+      await ctx.runMutation(fns.closeCameraSession, { sessionId });
+    }
     return { ok: true };
   },
 });
 
-export const cameraSession = action({
+export const cameraSession = query({
   args: { sessionId: v.string() },
-  handler: async (rawCtx, { sessionId }): Promise<CameraSession | null> => {
-    const ctx = rawCtx as unknown as ActionContext;
-    if (!SESSION_ID.test(sessionId)) return null;
-    const value = await ctx.slates
-      .open<CameraSession>("camera-sessions")
-      .read(sessionId);
-    return (value as CameraSession | undefined) ?? null;
+  handler: async (ctx, { sessionId }): Promise<CameraSession | null> => {
+    const row = await sessionRow(ctx, sessionId);
+    if (!row) return null;
+    const { entityId, startedAt, config, answer, candidates, error } = row as any;
+    return { entityId, startedAt, config, answer, candidates, error };
+  },
+});
+
+// Not in the manifest: written by `cameraSignal` and the bridge only.
+
+export const openCameraSession = mutation({
+  args: { sessionId: v.string(), entityId: v.string() },
+  handler: async (ctx, { sessionId, entityId }): Promise<void> => {
+    const now = Date.now();
+    for (const row of await ctx.db.query("cameraSessions").collect()) {
+      const r = row as any;
+      if (r.sessionId === sessionId || r.updatedAt < now - SESSION_STALE_MS) {
+        await ctx.db.delete(r._id);
+      }
+    }
+    await ctx.db.insert("cameraSessions", {
+      sessionId,
+      entityId,
+      startedAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+// Merges a reply into the session. `candidates` accumulate; other fields
+// replace. A reply for a session that has closed is dropped.
+export const updateCameraSession = mutation({
+  args: { sessionId: v.string(), patch: v.any() },
+  handler: async (ctx, { sessionId, patch }): Promise<void> => {
+    const row = (await sessionRow(ctx, sessionId)) as any;
+    if (!row) return;
+    const next: Record<string, unknown> = { updatedAt: Date.now() };
+    for (const key of ["config", "answer", "error"] as const) {
+      if (patch?.[key] !== undefined) next[key] = patch[key];
+    }
+    if (patch?.candidates && typeof patch.candidates === "object") {
+      next.candidates = { ...(row.candidates ?? {}), ...patch.candidates };
+    }
+    await ctx.db.patch(row._id, next);
+  },
+});
+
+export const closeCameraSession = mutation({
+  args: { sessionId: v.string() },
+  handler: async (ctx, { sessionId }): Promise<void> => {
+    const row = (await sessionRow(ctx, sessionId)) as any;
+    if (row) await ctx.db.delete(row._id);
   },
 });
 

@@ -51,6 +51,21 @@ const ingestIncidents = defineTable({
   offenders: v.any(),
 });
 
+// Camera handshakes in flight, one row per viewer session. The bridge writes
+// Home Assistant's replies here and the viewer watches the row through the
+// `cameraSession` query. Rows go when the viewer closes, or are swept once
+// they've gone ten minutes without a keepalive.
+const cameraSessions = defineTable({
+  sessionId: v.string(),
+  entityId: v.string(),
+  startedAt: v.number(),
+  updatedAt: v.number(),
+  config: v.optional(v.any()),
+  answer: v.optional(v.string()),
+  candidates: v.optional(v.any()), // { [seq]: RTCIceCandidateInit }
+  error: v.optional(v.any()), // { code, message }
+}).index("by_session", ["sessionId"]);
+
 // Pending pairing codes. Quiver-scoped because they're looked up by code
 // (not channel) from the channel-less /ha/connect route. `channelId` is a
 // plain column here (quiver scope reserves nothing), recording which
@@ -81,6 +96,7 @@ export default defineSchema({
   connection,
   registry,
   ingestIncidents,
+  cameraSessions,
   pairings,
   homes,
 });

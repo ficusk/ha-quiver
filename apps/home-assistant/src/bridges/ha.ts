@@ -447,8 +447,8 @@ function createEdgeRelay(): EdgeRelayProgram {
 const EDGE_RELAY = createEdgeRelay();
 const EDGE_RELAY_SOURCE = `(${createEdgeRelay.toString()})()`;
 
-// Translate one handshake message from Home Assistant into a merge patch on
-// the viewer's session. Candidates are keyed by sequence number so patches
+// Translate one handshake message from Home Assistant into an update to
+// the viewer's session. Candidates are keyed by sequence number so they
 // accumulate instead of replacing one another.
 function cameraSessionPatch(
   payload: CameraSignalPayload,
@@ -726,17 +726,15 @@ export default defineBridge<Record<string, string>, RelayState>()({
     ) => {
       await ctx.runMutation(api.backend.functions.setEdgeRelayStatus, payload);
     },
-    // The home's half of a camera handshake. The viewer started the session
-    // (see the `cameraSignal` action), so its Slate key already exists; a
-    // patch to a missing key means the viewer has gone and is dropped.
+    // The home's half of a camera handshake, merged into the viewer's
+    // session row. A reply for a session that has closed is dropped.
     cameraSignal: async (ctx: ActionContext, payload: CameraSignalPayload) => {
       const patch = cameraSessionPatch(payload);
       if (!patch) return;
-      try {
-        await ctx.slates.open("camera-sessions").patch(payload.sessionId, patch);
-      } catch (err: any) {
-        if (err?.code !== "missing_key") throw err;
-      }
+      await ctx.runMutation(api.backend.functions.updateCameraSession, {
+        sessionId: payload.sessionId,
+        patch,
+      });
     },
     connectionChanged: async (ctx: ActionContext, payload: ConnectionPayload) => {
       await ctx.runMutation(api.backend.functions.setConnection, {

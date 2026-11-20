@@ -1,10 +1,10 @@
 // Live camera view. The browser opens a WebRTC connection straight to the
 // camera's stream source; the handshake goes through `cameraSignal` (down to
-// Home Assistant) and comes back in the `camera-sessions` Slate. See
+// Home Assistant) and comes back through the `cameraSession` query. See
 // custom_components/quiver/camera.py for the other end.
 
 import { useEffect, useRef, useState } from "react";
-import { useAction, useSlate } from "@quiver/react";
+import { useAction, useQuery } from "@quiver/react";
 
 interface CameraSession {
   entityId: string;
@@ -30,8 +30,11 @@ const STATUS_TEXT: Record<Status, string> = {
 
 export function CameraView({ entityId }: { entityId: string }) {
   const signal = useAction("cameraSignal");
-  const sessions = useSlate<CameraSession>("camera-sessions");
   const [sessionId] = useState(() => crypto.randomUUID());
+  const session = useQuery("cameraSession", { sessionId }) as
+    | CameraSession
+    | null
+    | undefined;
   const [status, setStatus] = useState<Status>("starting");
   const [failure, setFailure] = useState<string | null>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -39,7 +42,6 @@ export function CameraView({ entityId }: { entityId: string }) {
   const remote = useRef<Promise<void> | null>(null);
   const applied = useRef(new Set<string>());
 
-  const session = sessions.read(sessionId);
   const config = session?.config;
   const answer = session?.answer;
   const remoteError = session?.error;
@@ -92,7 +94,7 @@ export function CameraView({ entityId }: { entityId: string }) {
   }, [config, entityId, sessionId, signal]);
 
   // Answer and remote candidates. Candidates can arrive before the answer is
-  // applied; they wait in the Slate until it is.
+  // applied; they wait in the session until it is.
   useEffect(() => {
     const conn = pc.current;
     if (!conn || !answer) return;

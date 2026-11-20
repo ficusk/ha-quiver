@@ -32,11 +32,6 @@ const manifest: AppManifest = {
       },
     },
   },
-  // Camera handshakes in flight, keyed by session id. Written only by
-  // actions; the dashboard subscribes.
-  slates: {
-    "camera-sessions": {},
-  },
   queries: {
     entities: {
       summary: "Every Home Assistant entity in this channel's home, with live state.",
@@ -52,6 +47,11 @@ const manifest: AppManifest = {
       summary: "Whether this channel's home is connected right now.",
       description:
         "{ connected: boolean, lastError?: string, lastSeen: number }, or null before the home has ever connected. While `connected` is false, control calls fail: show an offline hint and keep showing the last-known `entities`.",
+    },
+    cameraSession: {
+      summary: "Home Assistant's side of a camera handshake started with cameraSignal.",
+      description:
+        "args: { sessionId }. Reactive: null for an unknown or closed session, otherwise { entityId, startedAt, config?, answer?, candidates?: { [seq]: RTCIceCandidateInit }, error?: { code, message } }, updating as Home Assistant replies. Subscribe with useQuery rather than polling.",
     },
     pairingStatus: {
       summary: "Whether a home has been paired to this channel.",
@@ -91,12 +91,7 @@ const manifest: AppManifest = {
     cameraSignal: {
       summary: "Start, negotiate, keep alive, or stop a live WebRTC view of a camera.",
       description:
-        "args: { entityId: \"camera.…\", sessionId: 8–64 chars of [A-Za-z0-9_-] that you choose, type: \"start\" | \"offer\" | \"keepalive\" | \"close\", sdp?: string }. Video goes straight from the camera's stream source to your RTCPeerConnection; only the handshake goes through here.\n\n1. `start`. Home Assistant replies with `config` (read it with `cameraSession`): pass `config.configuration` to `new RTCPeerConnection`.\n2. Add a recvonly audio transceiver, then a recvonly video transceiver, then, if `config.dataChannel` is set, a data channel with that label. Keep that order: Nest rejects an offer whose m-lines aren't audio, video, application. Create the offer, set it as the local description, and wait for ICE gathering to finish (a few seconds at most). Send `offer` with the resulting `localDescription.sdp`. Candidates are never sent separately.\n3. Poll `cameraSession` until `answer` appears; set it as the remote description. Add each entry of `candidates` as it arrives. `error` means stop.\n4. Send `keepalive` every minute while watching; the home ends sessions that go three minutes without one. Send `close` when done.\n\nOnly cameras that support WebRTC in Home Assistant work: Nest cameras, and most others through Home Assistant's built-in go2rtc.",
-    },
-    cameraSession: {
-      summary: "Read Home Assistant's side of a camera handshake started with cameraSignal.",
-      description:
-        "args: { sessionId }. Returns null for an unknown session, or { entityId, startedAt, config?, answer?, candidates?: { [seq]: RTCIceCandidateInit }, error?: { code, message } }. Poll it every few hundred milliseconds during the handshake.",
+        "args: { entityId: \"camera.…\", sessionId: 8–64 chars of [A-Za-z0-9_-] that you choose, type: \"start\" | \"offer\" | \"keepalive\" | \"close\", sdp?: string }. Video goes straight from the camera's stream source to your RTCPeerConnection; only the handshake goes through here.\n\n1. `start`. Home Assistant replies with `config` (read it with `cameraSession`): pass `config.configuration` to `new RTCPeerConnection`.\n2. Add a recvonly audio transceiver, then a recvonly video transceiver, then, if `config.dataChannel` is set, a data channel with that label. Keep that order: Nest rejects an offer whose m-lines aren't audio, video, application. Create the offer, set it as the local description, and wait for ICE gathering to finish (a few seconds at most). Send `offer` with the resulting `localDescription.sdp`. Candidates are never sent separately.\n3. Watch the `cameraSession` query until `answer` appears; set it as the remote description. Add each entry of `candidates` as it arrives. `error` means stop.\n4. Send `keepalive` every minute while watching; the home ends sessions that go three minutes without one. Send `close` when done.\n\nOnly cameras that support WebRTC in Home Assistant work: Nest cameras, and most others through Home Assistant's built-in go2rtc.",
     },
     facadeGuide: {
       summary: "How to build a custom app or UI over this home. Returns a brief to follow.",

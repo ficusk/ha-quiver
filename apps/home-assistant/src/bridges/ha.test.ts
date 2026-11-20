@@ -208,15 +208,8 @@ describe("Home Assistant negotiated edge relay", () => {
 
     const patches: Array<[string, unknown]> = [];
     const ctx = {
-      slates: {
-        open: (name: string) => {
-          expect(name).toBe("camera-sessions");
-          return {
-            patch: async (key: string, patch: unknown) => {
-              patches.push([key, patch]);
-            },
-          };
-        },
+      runMutation: async (_fn: unknown, args: { sessionId: string; patch: unknown }) => {
+        patches.push([args.sessionId, args.patch]);
       },
     };
 
@@ -236,17 +229,5 @@ describe("Home Assistant negotiated edge relay", () => {
       ["session-1", { candidates: { "3": { candidate: "a", sdpMid: "0" } } }],
       ["session-1", { error: { code: "unavailable", message: "Camera is off" } }],
     ]);
-  });
-
-  it("drops a handshake reply for a viewer that has left", async () => {
-    const bridge = loadBridge();
-    const gone = Object.assign(new Error("missing"), { code: "missing_key" });
-    const ctx = {
-      slates: { open: () => ({ patch: async () => Promise.reject(gone) }) },
-    };
-    await bridge.dispatch.cameraSignal(ctx, {
-      sessionId: "session-1",
-      message: { type: "answer", answer: "v=0..." },
-    });
   });
 });
