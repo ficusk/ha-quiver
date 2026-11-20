@@ -1,0 +1,9 @@
+{
+  "name": "@quiver-app/home-assistant",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "lucide-react": "1.8.0"
+  }
+}

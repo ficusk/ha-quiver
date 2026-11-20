@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Quiver",
+        "description": "Open the Home Assistant app in your Quiver channel and paste the connect link it shows.",
+        "data": {
+          "url": "Connect link"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Couldn't reach Quiver at that link. Check the address and try again.",
+      "pairing_failed": "That link didn't work — it may have already been used. Reopen the channel for a fresh one."
+    },
+    "abort": {
+      "already_configured": "This home is already linked to that channel."
+    }
+  }
+}

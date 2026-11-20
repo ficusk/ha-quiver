@@ -1,0 +1,14 @@
+{
+  "domain": "quiver",
+  "name": "Quiver",
+  "version": "0.3.0",
+  "config_flow": true,
+  "documentation": "https://github.com/ficusk/ha-quiver",
+  "iot_class": "cloud_push",
+  "integration_type": "hub",
+  "codeowners": [],
+  "dependencies": [],
+  "requirements": [
+    "quickjs-ng==0.16.0.1"
+  ]
+}
