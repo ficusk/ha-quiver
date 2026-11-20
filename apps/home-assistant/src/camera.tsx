@@ -69,9 +69,11 @@ export function CameraView({ entityId }: { entityId: string }) {
     setStatus("connecting");
     const conn = new RTCPeerConnection(config.configuration);
     pc.current = conn;
-    if (config.dataChannel) conn.createDataChannel(config.dataChannel);
-    conn.addTransceiver("video", { direction: "recvonly" });
+    // Nest rejects offers whose m-lines aren't audio, video, data, in that
+    // order; this is also the order Home Assistant's own frontend uses.
     conn.addTransceiver("audio", { direction: "recvonly" });
+    conn.addTransceiver("video", { direction: "recvonly" });
+    if (config.dataChannel) conn.createDataChannel(config.dataChannel);
     conn.ontrack = (ev) => {
       const el = video.current;
       if (el && !el.srcObject) el.srcObject = ev.streams[0] ?? new MediaStream([ev.track]);
